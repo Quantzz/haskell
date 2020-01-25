@@ -41,6 +41,7 @@ module TensorFlow.Types
     , Attribute(..)
     , DataType(..)
     , ResourceHandle
+    , Variant
     -- * Lists
     , ListOf(..)
     , List
@@ -63,17 +64,19 @@ module TensorFlow.Types
     , AllTensorTypes
     ) where
 
+import Data.ProtoLens.Message(defMessage)
 import Data.Functor.Identity (Identity(..))
 import Data.Complex (Complex)
-import Data.Default (def)
 import Data.Int (Int8, Int16, Int32, Int64)
+import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
+import Data.ProtoLens.TextFormat (showMessageShort)
 import Data.Proxy (Proxy(..))
 import Data.String (IsString)
-import Data.Word (Word8, Word16, Word64)
+import Data.Word (Word8, Word16, Word32, Word64)
 import Foreign.Storable (Storable)
 import GHC.Exts (Constraint, IsList(..))
-import Lens.Family2 (Lens', view, (&), (.~))
+import Lens.Family2 (Lens', view, (&), (.~), (^..))
 import Lens.Family2.Unchecked (iso)
 import Text.Printf (printf)
 import qualified Data.Attoparsec.ByteString as Atto
@@ -85,9 +88,11 @@ import qualified Data.ByteString.Lazy as L
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as S
 import Proto.Tensorflow.Core.Framework.AttrValue
-    ( AttrValue(..)
-    , AttrValue'ListValue(..)
-    , b
+    ( AttrValue
+    , AttrValue'ListValue
+    )
+import Proto.Tensorflow.Core.Framework.AttrValue_Fields
+    ( b
     , f
     , i
     , s
@@ -96,23 +101,29 @@ import Proto.Tensorflow.Core.Framework.AttrValue
     , shape
     , tensor
     )
+
 import Proto.Tensorflow.Core.Framework.ResourceHandle
     (ResourceHandleProto)
 import Proto.Tensorflow.Core.Framework.Tensor as Tensor
-    ( TensorProto(..)
-    , boolVal
+    (TensorProto)
+import Proto.Tensorflow.Core.Framework.Tensor_Fields as Tensor
+    ( boolVal
     , doubleVal
     , floatVal
     , intVal
     , int64Val
     , resourceHandleVal
     , stringVal
-    , stringVal
+    , uint32Val
+    , uint64Val
     )
+
 import Proto.Tensorflow.Core.Framework.TensorShape
-    ( TensorShapeProto(..)
-    , dim
+    (TensorShapeProto)
+import Proto.Tensorflow.Core.Framework.TensorShape_Fields
+    ( dim
     , size
+    , unknownRank
     )
 import Proto.Tensorflow.Core.Framework.Types (DataType(..))
 
@@ -120,6 +131,11 @@ import TensorFlow.Internal.VarInt (getVarInt, putVarInt)
 import qualified TensorFlow.Internal.FFI as FFI
 
 type ResourceHandle = ResourceHandleProto
+
+-- | Dynamic type.
+-- TensorFlow variants aren't supported yet. This type acts a placeholder to
+-- simplify op generation.
+data Variant
 
 -- | The class of scalar types supported by tensorflow.
 class TensorType a where
@@ -160,6 +176,16 @@ instance TensorType Word16 where
     tensorRefType _ = DT_UINT16_REF
     tensorVal = intVal . integral
 
+instance TensorType Word32 where
+    tensorType _ = DT_UINT32
+    tensorRefType _ = DT_UINT32_REF
+    tensorVal = uint32Val
+
+instance TensorType Word64 where
+    tensorType _ = DT_UINT64
+    tensorRefType _ = DT_UINT64_REF
+    tensorVal = uint64Val
+
 instance TensorType Int16 where
     tensorType _ = DT_INT16
     tensorRefType _ = DT_INT16_REF
@@ -194,6 +220,11 @@ instance TensorType ResourceHandle where
     tensorType _ = DT_RESOURCE
     tensorRefType _ = DT_RESOURCE_REF
     tensorVal = resourceHandleVal
+
+instance TensorType Variant where
+    tensorType _ = DT_VARIANT
+    tensorRefType _ = DT_VARIANT_REF
+    tensorVal = error "TODO Variant"
 
 -- | Tensor data with the correct memory layout for tensorflow.
 newtype TensorData a = TensorData { unTensorData :: FFI.TensorData }
@@ -353,6 +384,9 @@ headFromSingleton x
 
 
 -- | Shape (dimensions) of a tensor.
+--
+-- TensorFlow supports shapes of unknown rank, which are represented as
+-- @Nothing :: Maybe Shape@ in Haskell.
 newtype Shape = Shape [Int64] deriving Show
 
 instance IsList Shape where
@@ -363,8 +397,24 @@ instance IsList Shape where
 protoShape :: Lens' TensorShapeProto Shape
 protoShape = iso protoToShape shapeToProto
   where
-    protoToShape = Shape . fmap (view size) . view dim
-    shapeToProto (Shape ds) = (def :: TensorShapeProto) & dim .~ fmap (\d -> def & size .~ d) ds
+    protoToShape p = fromMaybe (error msg) (view protoMaybeShape p)
+      where msg = "Can't convert TensorShapeProto with unknown rank to Shape: "
+                  ++ showMessageShort p
+    shapeToProto s' = defMessage & protoMaybeShape .~ Just s'
+
+protoMaybeShape :: Lens' TensorShapeProto (Maybe Shape)
+protoMaybeShape = iso protoToShape shapeToProto
+  where
+    protoToShape :: TensorShapeProto -> Maybe Shape
+    protoToShape p =
+        if view unknownRank p
+            then Nothing
+            else Just (Shape (p ^.. dim . traverse . size))
+    shapeToProto :: Maybe Shape -> TensorShapeProto
+    shapeToProto Nothing =
+        defMessage & unknownRank .~ True
+    shapeToProto (Just (Shape ds)) =
+        defMessage & dim .~ fmap (\d -> defMessage & size .~ d) ds
 
 
 class Attribute a where
@@ -390,6 +440,9 @@ instance Attribute Bool where
 
 instance Attribute Shape where
     attrLens = shape . protoShape
+
+instance Attribute (Maybe Shape) where
+    attrLens = shape . protoMaybeShape
 
 -- TODO(gnezdo): support generating list(Foo) from [Foo].
 instance Attribute AttrValue'ListValue where

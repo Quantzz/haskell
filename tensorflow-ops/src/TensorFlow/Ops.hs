@@ -112,6 +112,8 @@ module TensorFlow.Ops
     , CoreOps.relu'
     , CoreOps.reluGrad
     , CoreOps.reluGrad'
+    , CoreOps.tanh
+    , CoreOps.tanhGrad
     , CoreOps.reshape
     , CoreOps.reshape'
     , restore
@@ -121,6 +123,8 @@ module TensorFlow.Ops
     , scalar'
     , shape
     , shape'
+    , CoreOps.sigmoid
+    , CoreOps.sigmoidGrad
     , CoreOps.sign
     , CoreOps.sign'
     , CoreOps.size
@@ -156,17 +160,18 @@ import Data.Complex (Complex)
 import Data.Int (Int32, Int64)
 import Data.Word (Word16)
 import Prelude hiding (abs, sum, concat)
-import Data.ProtoLens (def)
+import Data.ProtoLens.Default(def)
 import Data.Text.Encoding (encodeUtf8)
 import Lens.Family2 ((.~), (&))
 import Text.Printf (printf)
-import Proto.Tensorflow.Core.Framework.Tensor
-    ( TensorProto
-    , dtype
+import Proto.Tensorflow.Core.Framework.Tensor  (TensorProto)
+import Proto.Tensorflow.Core.Framework.Tensor_Fields
+    ( dtype
     , tensorShape
     )
-import qualified Proto.Tensorflow.Core.Framework.TensorShape
+import qualified Proto.Tensorflow.Core.Framework.TensorShape_Fields
   as TensorShape
+
 import TensorFlow.Build
 import TensorFlow.BuildOp
 import TensorFlow.ControlFlow (group)
@@ -377,7 +382,7 @@ truncatedNormal' :: (MonadBuild m, OneOf '[Word16, Double, Float] a)
 truncatedNormal' = CoreOps.truncatedNormal'
 
 zeros :: forall a . (Num a, TensorType a) => Shape -> Tensor Build a
-zeros (Shape s) = CoreOps.fill (vector $ map fromIntegral s) (scalar 0)
+zeros (Shape s) = CoreOps.fill (vector s) (scalar 0)
 
 shape :: TensorType t => Tensor v t -> Tensor Build Int32
 shape = CoreOps.shape

@@ -1,4 +1,4 @@
-resolver: lts-8.13
+resolver: lts-14.4
 
 packages:
 - tensorflow
@@ -14,14 +14,8 @@ packages:
 - tensorflow-test
 
 extra-deps:
-- snappy-framing-0.1.1
+- snappy-framing-0.1.2
 - snappy-0.2.0.2
-# TODO: Remove these once the new versions are in lts-9.
-- proto-lens-protobuf-types-0.2.2.0
-- proto-lens-0.2.2.0
-- proto-lens-descriptors-0.2.2.0
-- proto-lens-protoc-0.2.2.3
-- lens-labels-0.1.0.2
 
 # For Mac OS X, whose linker doesn't use this path by default
 # unless you run `xcode-select --install`.
@@ -30,3 +24,7 @@ extra-lib-dirs:
     - /usr/local/lib
 extra-include-dirs:
     - /usr/local/include
+
+nix:
+    enable: false
+    shell-file: shell.nix

@@ -11,6 +11,7 @@
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NoMonadFailDesugaring #-}
 module TensorFlow.Variable
     ( Variable
     , variable
@@ -61,12 +62,21 @@ variable = variable' id
 
 variable' :: forall m a . (MonadBuild m, TensorType a)
                     => OpParams -> Shape -> m (Variable a)
-variable' params s = build $ do
+variable' params s = variableInternal params (Just s)
+
+variableInternal :: forall m a . (MonadBuild m, TensorType a)
+                 => OpParams -> Maybe Shape -> m (Variable a)
+variableInternal params s = build $ do
     -- Each variable needs a unique "shared_name".  Use MonadFix to
     -- set the attribute to the same name as the variable itself, without
     -- exposing more internals of the Build module.
-    rec t <- CoreOps.varHandleOp' (params . (opAttr "shared_name" .~ n))
-                                    (tensorType (undefined :: a)) s
+    rec let attrs = params . (opAttr "shared_name" .~ n) . (opAttr "shape" .~ s)
+            dtype = tensorType (undefined :: a)
+            -- Generated ops don't support unknown shapes. As a workaround, we
+            -- pass in a rank zero shape and then override it using OpParams.
+            -- TODO: Consider supporting this better in op generation.
+            shape = Shape []
+        t <- CoreOps.varHandleOp' attrs dtype shape
         let n = encodeUtf8 $ unNodeName $ tensorNodeName t
     return $ Variable t Nothing
 
@@ -80,7 +90,7 @@ initializedVariable' :: forall a m v . (MonadBuild m, TensorType a)
                     => OpParams -> Tensor v a -> m (Variable a)
 initializedVariable' params initializer = do
     -- The shape is not known initially.
-    (Variable h Nothing :: Variable a) <- variable' params (Shape [])
+    (Variable h Nothing :: Variable a) <- variableInternal params Nothing
     initializer' <- renderValue initializer
     i <- CoreOps.assignVariableOp h initializer'
     addInitializer =<< group i

@@ -16,12 +16,13 @@
 module Main where
 
 import Control.Monad.Trans.Resource (runResourceT)
-import Data.Conduit ((=$=))
-import Data.Default (def)
+import Data.Conduit ((.|))
+import Data.ProtoLens.Message (defMessage)
 import Data.List ((\\))
 import Data.ProtoLens (encodeMessage, decodeMessageOrDie)
 import Lens.Family2 ((^.), (.~), (&))
-import Proto.Tensorflow.Core.Util.Event (Event, graphDef, fileVersion, step)
+import Proto.Tensorflow.Core.Util.Event (Event)
+import Proto.Tensorflow.Core.Util.Event_Fields (graphDef, fileVersion, step)
 import System.Directory (getDirectoryContents)
 import System.FilePath ((</>))
 import System.IO.Temp (withSystemTempDirectory)
@@ -44,16 +45,16 @@ testEventWriter :: Test
 testEventWriter = testCase "EventWriter" $
     withSystemTempDirectory "event_writer_logs" $ \dir -> do
         assertEqual "No file before" [] =<< listDirectory dir
-        let expected = [ (def :: Event) & step .~ 10
-                       , def & step .~ 222
-                       , def & step .~ 8
+        let expected = [ (defMessage :: Event) & step .~ 10
+                       , defMessage & step .~ 222
+                       , defMessage & step .~ 8
                        ]
         withEventWriter dir $ \eventWriter ->
             mapM_ (logEvent eventWriter) expected
         files <- listDirectory dir
         assertEqual "One file exists after" 1 (length files)
         records <- runResourceT $ Conduit.runConduit $
-            sourceTFRecords (dir </> head files) =$= Conduit.consume
+            sourceTFRecords (dir </> head files) .| Conduit.consume
         assertBool "File is not empty" (not (null records))
         let (header:body) = decodeMessageOrDie . BL.toStrict <$> records
         assertEqual "Header has expected version"
@@ -65,13 +66,13 @@ testLogGraph = testCase "LogGraph" $
     withSystemTempDirectory "event_writer_logs" $ \dir -> do
         let graphBuild = noOp :: Build ControlNode
             expectedGraph = asGraphDef graphBuild
-            expectedGraphEvent = (def :: Event) & graphDef .~ (encodeMessage expectedGraph)
+            expectedGraphEvent = (defMessage :: Event) & graphDef .~ (encodeMessage expectedGraph)
 
         withEventWriter dir $ \eventWriter ->
             logGraph eventWriter graphBuild
         files <- listDirectory dir
         records <- runResourceT $ Conduit.runConduit $
-            sourceTFRecords (dir </> head files) =$= Conduit.consume
+            sourceTFRecords (dir </> head files) .| Conduit.consume
         let (_:event:_) = decodeMessageOrDie . BL.toStrict <$> records
         assertEqual "First record expected to be Event containing GraphDef" expectedGraphEvent event
 

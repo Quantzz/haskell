@@ -20,7 +20,7 @@ library
   exposed-modules: TensorFlow.Examples.MNIST.Parse
                 ,  TensorFlow.Examples.MNIST.TrainedGraph
   other-modules:  Paths_tensorflow_mnist
-  build-depends:  proto-lens == 0.2.*
+  build-depends: proto-lens >= 0.4.0 && < 0.6.0
                 , base >= 4.7 && < 5
                 , binary
                 , bytestring
@@ -28,9 +28,9 @@ library
                 , lens-family
                 , containers
                 , split
-                , tensorflow-proto == 0.1.*
-                , tensorflow-core-ops == 0.1.*
-                , tensorflow
+                , tensorflow-proto == 0.2.*
+                , tensorflow-core-ops == 0.2.*
+                , tensorflow == 0.2.*
                 , text
                 , vector
                 , zlib

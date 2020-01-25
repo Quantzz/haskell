@@ -51,7 +51,8 @@ module TensorFlow.OpGen
 
 import Data.Foldable (toList)
 import Data.Maybe (fromMaybe)
-import Data.ProtoLens (def, showMessage)
+import Data.ProtoLens.Default(def)
+import Data.ProtoLens (showMessage)
 import Data.List (sortOn)
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
@@ -60,7 +61,9 @@ import Options.Applicative (Parser, help, long, strOption, value)
 import Proto.Tensorflow.Core.Framework.OpDef
   ( OpList
   , OpDef
-  , attr
+  )
+import Proto.Tensorflow.Core.Framework.OpDef_Fields
+  ( attr
   , inputArg
   , name
   , op
@@ -69,9 +72,9 @@ import Proto.Tensorflow.Core.Framework.OpDef
 import Proto.Tensorflow.Core.Framework.Types (DataType(..))
 import System.FilePath (takeBaseName)
 import TensorFlow.OpGen.ParsedOp
+import Data.Semigroup ((<>))
 import Text.PrettyPrint.Mainland
   ( Doc
-  , (<>)
   , (<+>)
   , (</>)
   , (<+/>)
@@ -150,7 +153,7 @@ imports = stack [
     , "import Data.Complex (Complex)"
     , "import Data.Int (Int8, Int16, Int32, Int64)"
     , "import Data.Proxy (Proxy(Proxy))"
-    , "import Data.Word (Word8, Word16)"
+    , "import Data.Word (Word8, Word16, Word32, Word64)"
     , "import Lens.Family2 ((.~), (&))"
     , "import TensorFlow.Build"
     , "import TensorFlow.BuildOp"
@@ -415,9 +418,12 @@ dtTypeToHaskell DT_QUINT16 = "Data.Word.Word16"  -- TODO(gnezdo): make unique
 dtTypeToHaskell DT_QUINT8 = "Data.Word.Word8"  -- TODO(gnezdo): make unique
 dtTypeToHaskell DT_STRING = "Data.ByteString.ByteString"
 dtTypeToHaskell DT_UINT16 = "Data.Word.Word16"
+dtTypeToHaskell DT_UINT32 = "Data.Word.Word32"
+dtTypeToHaskell DT_UINT64 = "Data.Word.Word64"
 dtTypeToHaskell DT_HALF = "Data.Word.Word16"  -- TODO(gnezdo): make unique
 dtTypeToHaskell DT_UINT8 = "Data.Word.Word8"
 dtTypeToHaskell DT_RESOURCE = "ResourceHandle"
+dtTypeToHaskell DT_VARIANT = "Variant"
 dtTypeToHaskell x =
     Text.pack $ "Unsupported type in dtTypeToHaskell: " ++ show x
 

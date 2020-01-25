@@ -15,4 +15,5 @@ mkdir -p $DOCS
 cp $DOC_ROOT/{*.html,*js,*.png,*.gif,*.css} $DOCS
 cp -a $DOC_ROOT/tensorflow* $DOCS
 rm -f $DOCS/*/*.haddock
+(cd $DOCS && ln -s tensorflow-?.* tensorflow)
 git add $DOCS
